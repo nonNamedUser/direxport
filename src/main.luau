@@ -231,6 +231,8 @@ btn.Position = UDim2.new(0.3, 0, 0.75, 0)
 btn.Text = "Upload Gist"
 btn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
 
+ui:Destroy()
+
 btn.MouseButton1Click:Connect(function()
     local token = textBox.Text
     if token == "" then label.Text = "Token required!"; return end
