@@ -180,8 +180,51 @@ table.insert(outputChunks, "</RobloxExport>")
 
 -- Combine everything at the very end
 local finalOutput = table.concat(outputChunks)
-clip(finalOutput)
+local httpRequest = request or http_request or (http and http.request) or syn.request
 
-statusLabel.Text = "Export Finished! Copied to clipboard."
+if httpRequest then
+    statusLabel.Text = "Uploading to web..."
+    task.wait()
+
+    -- 2. Send the massive text to paste.rs (a free, no-key text host)
+    local response = httpRequest({
+        Url = "https://paste.rs/",
+        Method = "POST",
+        Body = finalOutput,
+        Headers = {
+            ["Content-Type"] = "text/plain"
+        }
+    })
+
+    -- 3. Handle the response
+    if response.Success then
+        -- paste.rs returns the direct link as the body text
+        local url = response.Body
+        clip(url)
+        statusLabel.Text = "Uploaded! Link copied to clipboard."
+    else
+        statusLabel.Text = "Upload failed (file might be too big)."
+        task.wait(1)
+        
+        -- Safe fallback: Save as a file if the paste site rejects the massive size
+        if writefile then
+            statusLabel.Text = "Saving to workspace folder instead..."
+            writefile("ExportedGame.xml", finalOutput)
+            statusLabel.Text = "Saved to executor workspace!"
+        else
+            -- Absolute last resort
+            clip(finalOutput) 
+            statusLabel.Text = "Upload failed. Copied raw text to clipboard."
+        end
+    end
+else
+    statusLabel.Text = "HTTP requests blocked. Saving to file..."
+    if writefile then
+        writefile("ExportedGame.xml", finalOutput)
+        statusLabel.Text = "Saved to executor workspace!"
+    else
+        clip(finalOutput)
+    end
+end
 task.wait(2)
 ui:Destroy()
