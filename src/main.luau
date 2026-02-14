@@ -137,37 +137,48 @@ local count = 0
 local function serialize(obj)
     count = count + 1
     
-    -- Yielding to prevent crashes and update UI
-    if count % 150 == 0 then
-        local progress = count / totalObjects
-        progressBar.Size = UDim2.new(progress, 0, 1, 0)
-        
-        local elapsed = tick() - startTime
-        local estimatedTotal = elapsed / progress
-        local remaining = math.max(0, estimatedTotal - elapsed)
-        
-        statusLabel.Text = string.format("%d/%d objects | ETA: %.1fs", count, totalObjects, remaining)
+    -- UI & Performance: Yield every 200 objects to prevent Delta from freezing
+    if count % 200 == 0 then 
+        if statusLabel then
+            statusLabel.Text = "Processing: " .. count .. " objects..."
+        end
         task.wait() 
     end
 
     local className = obj.ClassName
     table.insert(outputChunks, string.format('  <Item class="%s" name="%s">\n', escapeXML(className), escapeXML(obj.Name)))
-    
-    local props = getFlattenedProperties(className)
-    for _, prop in ipairs(props) do
-        -- Skip properties that are notorious for erroring
-        if prop.name == "Parent" then continue end 
+
+    -- 1. Special Handling for Scripts (LocalScripts & Modules)
+    if obj:IsA("LuaSourceContainer") then
+        -- Use the executor's decompiler if available
+        local decompiler = decompile or (bit and bit.decompile) or (hookmetamethod and decompile)
+        local success, source = pcall(function() 
+            return decompiler(obj) 
+        end)
         
-        local success, val = pcall(function() return formatVal(obj, prop.name) end)
-        if success and val ~= nil then
-            table.insert(outputChunks, string.format('    <P n="%s" t="%s">%s</P>\n', escapeXML(prop.name), escapeXML(typeof(obj[prop.name])), escapeXML(val)))
+        if success and source then
+            table.insert(outputChunks, string.format('    <P n="Source" t="string">%s</P>\n', escapeXML(source)))
         end
     end
-    
+
+    -- 2. Standard Property Serialization
+    local props = getProps(className)
+    for _, prop in ipairs(props) do
+        -- Skip Parent (handled by nesting) and Source (handled above)
+        if prop.n == "Parent" or prop.n == "Source" then continue end
+        
+        local success, val = pcall(function() return formatVal(obj, prop.n) end)
+        if success and val ~= nil then
+            table.insert(outputChunks, string.format('    <P n="%s" t="%s">%s</P>\n', escapeXML(prop.n), escapeXML(typeof(obj[prop.n])), escapeXML(val)))
+        end
+    end
+
+    -- 3. Recursion: Process children
     for _, child in ipairs(obj:GetChildren()) do 
         serialize(child) 
     end
-    
+
+    -- 4. Close the Item tag
     table.insert(outputChunks, "  </Item>\n")
 end
 
