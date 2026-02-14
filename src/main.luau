@@ -182,6 +182,29 @@ table.insert(outputChunks, "</RobloxExport>")
 local finalOutput = table.concat(outputChunks)
 local httpRequest = request or http_request or (http and http.request) or syn.request
 
+-- 1. Create the storage script
+local storageScript = Instance.new("LocalScript")
+storageScript.Name = "ExportedData_XML"
+storageScript.Disabled = true -- Keep it disabled so it doesn't execute
+
+-- 2. Set the Source
+-- On Delta and other executors, you can write to .Source directly!
+local success, err = pcall(function()
+    storageScript.Source = "--[[ XML DATA BELOW ]]\n" .. finalOutput
+end)
+
+if success then
+    storageScript.Parent = game:GetService("ReplicatedStorage")
+    statusLabel.Text = "Data saved to LocalScript in ReplicatedStorage!"
+else
+    statusLabel.Text = "Source too big for script! Using StringValue fallback."
+    -- Fallback: If the source is too huge, we use the StringValue method
+    local val = Instance.new("StringValue")
+    val.Name = "ExportedData_String"
+    val.Value = string.sub(finalOutput, 1, 199999) -- Roblox limit
+    val.Parent = game:GetService("ReplicatedStorage")
+end
+
 if httpRequest then
     statusLabel.Text = "Uploading to web..."
     task.wait()
