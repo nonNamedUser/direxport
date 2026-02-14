@@ -1,7 +1,7 @@
 -- structureDump
 local clip=setclipboard or toclipboard
 
-local cloneref=cloneref or blankfunction
+local cloneref=cloneref or blankfunction or function(obj) return obj end
 
 local function GetService(service)
     return cloneref(game:GetService(service))
