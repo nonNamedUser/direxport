@@ -20,14 +20,14 @@ local function dumpInstance(ins, indent)
     output = output .. prefix .. " -> " .. ins.Name .. " (" .. ins.ClassName .. ")\n"
     
     for _, child in ipairs(ins:GetChildren()) do
-        dumpInstance(child, indent + 1)
+        task.spawn(dumpInstance child, indent + 1)
     end
 end
 
 for _, service in ipairs(services) do
     output = output .. "[" .. service.Name .. "]\n"
     for _, child in ipairs(service:GetChildren()) do
-        dumpInstance(child, 1)
+        task.spawn(dumpInstancechild, 1)
     end
     output = output .. "\n"
 end
