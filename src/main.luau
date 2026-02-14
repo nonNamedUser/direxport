@@ -8,9 +8,20 @@ local function GetService(service)
     return cloneref(game:GetService(service))
 end
 
+-- Proper XML Escaping
+local function escapeXML(str)
+    str = tostring(str)
+    str = string.gsub(str, "&", "&amp;")
+    str = string.gsub(str, "<", "&lt;")
+    str = string.gsub(str, ">", "&gt;")
+    str = string.gsub(str, '"', "&quot;")
+    str = string.gsub(str, "'", "&apos;")
+    return str
+end
+
 -- UI Creation
 local function createProgressUI(total)
-    local sg = Instance.new("ScreenGui", game:GetService("CoreGui"))
+    local sg = Instance.new("ScreenGui", cloneref(game:GetService("CoreGui")))
     sg.Name = "ExportProgressUI"
     
     local main = Instance.new("Frame", sg)
@@ -65,6 +76,7 @@ local function getFlattenedProperties(className)
     if propertyCache[className] then return propertyCache[className] end
     local props = {}
     local current = className
+    
     while current and current ~= "<<<ROOT>>>" do
         local data = classMap[current]
         if data then
@@ -77,8 +89,11 @@ local function getFlattenedProperties(className)
                 end
             end
             current = data.Superclass
-        else break end
+        else 
+            break 
+        end
     end
+    
     propertyCache[className] = props
     return props
 end
@@ -86,27 +101,28 @@ end
 local function formatVal(obj, pName)
     local v = obj[pName]
     local t = typeof(v)
+    
     if t == "CFrame" then return table.concat({v:GetComponents()}, ",")
     elseif t == "Vector3" or t == "Vector2" then return tostring(v)
-    elseif t == "Color3" then return v.R..","..v.G..","..v.B
+    elseif t == "Color3" then return math.round(v.R*255)..","..math.round(v.G*255)..","..math.round(v.B*255)
     elseif t == "EnumItem" then return tostring(v)
     elseif t == "UDim2" then return v.X.Scale..","..v.X.Offset..","..v.Y.Scale..","..v.Y.Offset
     end
+    
     return tostring(v)
 end
 
-local output = "<RobloxExport>\n"
-local count = 0
-local totalObjects = 0
-
+-- Setup target services
 local services = {
     GetService("Workspace"),
     GetService("ReplicatedStorage"),
     GetService("ReplicatedFirst"),
+    GetService("Lighting"),
     GetService("StarterGui"),
     GetService("StarterPlayer")
 }
 
+local totalObjects = 0
 for _, s in ipairs(services) do
     totalObjects = totalObjects + #s:GetDescendants() + 1
 end
@@ -114,10 +130,15 @@ end
 local ui, progressBar, statusLabel = createProgressUI(totalObjects)
 local startTime = tick()
 
+-- Use a table for massive performance gains when building strings
+local outputChunks = {"<RobloxExport>\n"}
+local count = 0
+
 local function serialize(obj)
     count = count + 1
     
-    if count % 100 == 0 then
+    -- Yielding to prevent crashes and update UI
+    if count % 150 == 0 then
         local progress = count / totalObjects
         progressBar.Size = UDim2.new(progress, 0, 1, 0)
         
@@ -126,17 +147,20 @@ local function serialize(obj)
         local remaining = math.max(0, estimatedTotal - elapsed)
         
         statusLabel.Text = string.format("%d/%d objects | ETA: %.1fs", count, totalObjects, remaining)
-        task.wait(0.01) 
+        task.wait() 
     end
 
     local className = obj.ClassName
-    output = output .. string.format('  <Item class="%s" name="%s">\n', className, HttpService:UrlEncode(obj.Name))
+    table.insert(outputChunks, string.format('  <Item class="%s" name="%s">\n', escapeXML(className), escapeXML(obj.Name)))
     
     local props = getFlattenedProperties(className)
     for _, prop in ipairs(props) do
+        -- Skip properties that are notorious for erroring
+        if prop.name == "Parent" then continue end 
+        
         local success, val = pcall(function() return formatVal(obj, prop.name) end)
         if success and val ~= nil then
-            output = output .. string.format('    <P n="%s" t="%s">%s</P>\n', prop.name, typeof(obj[prop.name]), HttpService:UrlEncode(val))
+            table.insert(outputChunks, string.format('    <P n="%s" t="%s">%s</P>\n', escapeXML(prop.name), escapeXML(typeof(obj[prop.name])), escapeXML(val)))
         end
     end
     
@@ -144,15 +168,20 @@ local function serialize(obj)
         serialize(child) 
     end
     
-    output = output .. "  </Item>\n"
+    table.insert(outputChunks, "  </Item>\n")
 end
 
-serialize(game) -- You can serialize specific services or just the whole game
+-- Start serialization on specific services to avoid core game crash
+for _, service in ipairs(services) do
+    serialize(service)
+end
 
-output = output .. "</RobloxExport>"
-clip(output)
+table.insert(outputChunks, "</RobloxExport>")
 
+-- Combine everything at the very end
+local finalOutput = table.concat(outputChunks)
+clip(finalOutput)
 
-statusLabel.Text = "Export Finished! Cleaning up..."
-task.wait(1)
+statusLabel.Text = "Export Finished! Copied to clipboard."
+task.wait(2)
 ui:Destroy()
