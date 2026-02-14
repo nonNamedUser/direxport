@@ -205,49 +205,66 @@ else
     val.Parent = game:GetService("ReplicatedStorage")
 end
 
-if httpRequest then
-    statusLabel.Text = "Uploading to web..."
-    task.wait()
+statusLabel.Text="Creating token GUI"
 
-    -- 2. Send the massive text to paste.rs (a free, no-key text host)
-    local response = httpRequest({
-        Url = "https://paste.rs/",
-        Method = "POST",
-        Body = finalOutput,
-        Headers = {
-            ["Content-Type"] = "text/plain"
+local sg = Instance.new("ScreenGui", game:GetService("CoreGui"))
+local frame = Instance.new("Frame", sg)
+frame.Size = UDim2.new(0, 300, 0, 120)
+frame.Position = UDim2.new(0.5, -150, 0.4, 0)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+
+local label = Instance.new("TextLabel", frame)
+label.Size = UDim2.new(1, 0, 0, 40)
+label.Text = "Paste GitHub Token to Upload Gist:"
+label.TextColor3 = Color3.new(1, 1, 1)
+label.BackgroundTransparency = 1
+
+local textBox = Instance.new("TextBox", frame)
+textBox.Size = UDim2.new(0.9, 0, 0, 30)
+textBox.Position = UDim2.new(0.05, 0, 0.4, 0)
+textBox.PlaceholderText = "ghp_xxxxxxxxxxxx"
+textBox.Text = ""
+
+local btn = Instance.new("TextButton", frame)
+btn.Size = UDim2.new(0.4, 0, 0, 30)
+btn.Position = UDim2.new(0.3, 0, 0.75, 0)
+btn.Text = "Upload Gist"
+btn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+
+btn.MouseButton1Click:Connect(function()
+    local token = textBox.Text
+    if token == "" then label.Text = "Token required!"; return end
+    
+    label.Text = "Uploading..."
+    
+    local payload = HttpService:JSONEncode({
+        description = "Roblox Game Export - " .. os.date(),
+        public = false,
+        files = {
+            ["ExportedGame.xml"] = {
+                content = finalOutput
+            }
         }
     })
 
-    -- 3. Handle the response
+    local response = httpRequest({
+        Url = "https://api.github.com/gists",
+        Method = "POST",
+        Headers = {
+            ["Authorization"] = "token " .. token,
+            ["Content-Type"] = "application/json"
+        },
+        Body = payload
+    })
+
     if response.Success then
-        -- paste.rs returns the direct link as the body text
-        local url = response.Body
-        clip(url)
-        statusLabel.Text = "Uploaded! Link copied to clipboard."
+        local data = HttpService:JSONDecode(response.Body)
+        setclipboard(data.html_url)
+        label.Text = "Success! Link copied."
+        task.wait(2)
+        sg:Destroy()
     else
-        statusLabel.Text = "Upload failed (file might be too big)."
-        task.wait(1)
-        
-        -- Safe fallback: Save as a file if the paste site rejects the massive size
-        if writefile then
-            statusLabel.Text = "Saving to workspace folder instead..."
-            writefile("ExportedGame.xml", finalOutput)
-            statusLabel.Text = "Saved to executor workspace!"
-        else
-            -- Absolute last resort
-            clip(finalOutput) 
-            statusLabel.Text = "Upload failed. Copied raw text to clipboard."
-        end
+        label.Text = "Error: " .. response.StatusCode
+        warn(response.Body)
     end
-else
-    statusLabel.Text = "HTTP requests blocked. Saving to file..."
-    if writefile then
-        writefile("ExportedGame.xml", finalOutput)
-        statusLabel.Text = "Saved to executor workspace!"
-    else
-        clip(finalOutput)
-    end
-end
-task.wait(2)
-ui:Destroy()
+end)
