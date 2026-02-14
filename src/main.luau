@@ -391,14 +391,13 @@ local function exportXML()
     bar.Size = UDim2.new(1, 0, 1, 0)
     status.Text = "Saving payload..."
 
-    local old = game:GetService("ReplicatedStorage"):FindFirstChild("CORE_DUMP_DATA")
-    if old then
-        old:Destroy()
-    end
-    local oldStr = game:GetService("ReplicatedStorage"):FindFirstChild("CORE_DUMP_DATA_STRING")
-    if oldStr then
-        oldStr:Destroy()
-    end
+    local rs = game:GetService("ReplicatedStorage")
+    local old = rs:FindFirstChild("CORE_DUMP_DATA")
+    if old then old:Destroy() end
+    local oldStr = rs:FindFirstChild("CORE_DUMP_DATA_STRING")
+    if oldStr then oldStr:Destroy() end
+    local oldChunks = rs:FindFirstChild("CORE_DUMP_CHUNKS")
+    if oldChunks then oldChunks:Destroy() end
 
     local dump = Instance.new("LocalScript")
     dump.Name = "CORE_DUMP_DATA"
@@ -409,14 +408,37 @@ local function exportXML()
     end)
 
     if okWrite then
-        dump.Parent = game:GetService("ReplicatedStorage")
-        status.Text = "Saved to ReplicatedStorage/CORE_DUMP_DATA"
-    else
-        local marker = Instance.new("StringValue")
-        marker.Name = "CORE_DUMP_DATA_STRING"
-        marker.Value = "EXPORT_TOO_LARGE_FOR_LOCALSCRIPT"
-        marker.Parent = game:GetService("ReplicatedStorage")
-        status.Text = "Too large for LocalScript. Use Gist upload below."
+        dump.Parent = rs
+        task.wait(0.1)
+        local verifyOk = pcall(function()
+            return #dump.Source >= #("--[[ XML DATA BELOW ]]\n")
+        end)
+        if verifyOk then
+            status.Text = "Saved to ReplicatedStorage/CORE_DUMP_DATA"
+        else
+            okWrite = false
+            dump:Destroy()
+        end
+    end
+
+    if not okWrite then
+        local folder = Instance.new("Folder")
+        folder.Name = "CORE_DUMP_CHUNKS"
+        folder.Parent = rs
+
+        local chunkSize = 180000
+        local totalChunks = math.ceil(#xml / chunkSize)
+        folder:SetAttribute("TotalChunks", totalChunks)
+
+        for i = 1, totalChunks do
+            local sv = Instance.new("StringValue")
+            sv.Name = string.format("Chunk_%04d", i)
+            local startIdx = ((i - 1) * chunkSize) + 1
+            sv.Value = xml:sub(startIdx, startIdx + chunkSize - 1)
+            sv.Parent = folder
+        end
+
+        status.Text = string.format("Saved in %d chunks (CORE_DUMP_CHUNKS).", totalChunks)
     end
 
     task.wait(0.4)
