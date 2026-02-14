@@ -126,7 +126,7 @@ local function serialize(obj)
         local remaining = math.max(0, estimatedTotal - elapsed)
         
         statusLabel.Text = string.format("%d/%d objects | ETA: %.1fs", count, totalObjects, remaining)
-        task.wait() 
+        task.wait(0.01) 
     end
 
     local className = obj.ClassName
