@@ -2,7 +2,7 @@ while task.wait()  do
 	local rng = Random.new()
 	local randomPosition = Vector3.new(
 		rng:NextNumber(-100000, 100000),
-		rng:NextNumber(-100000, 100000),
+		99
 		rng:NextNumber(-100000, 100000)
 	)
 
