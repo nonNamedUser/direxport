@@ -52,10 +52,12 @@ local db=false
 
 local cc="pos"
 local name=""
-local pos=Vector3.new(0,200,0)
+local pos=Vector3.new(0,0,0)
+
+task.spawn(fling)
 
 task.spawn(function()
-    while task.wait(0.1) do
+    while task.wait() do
         if cc == "p" then
             local p=Players:FindFirstChild(name)
             if p then
@@ -70,7 +72,6 @@ end)
 button.MouseButton1Click:Connect(function ()
     if db then return end
     db=true
-    task.spawn(fling)
     for _, player in Players:GetPlayers() do
         if table.find(whitelist,string.lower(player.Name)) then continue end
         name=player.Name
